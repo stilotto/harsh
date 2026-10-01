@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Emberwake</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral+SC:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: full-bleed canvas world; HUD pinned top-left, message log top-center, action rail pinned bottom. One committed night-steppe look. */
+:root {
+  --ink: #0b0d16;
+  --panel: rgba(11, 13, 22, .88);
+  --ash: #e9e1cf;
+  --dim: #9a937f;
+  --ember: #f2a03d;
+  --blood: #c4453a;
+  --frost: #a9d4e8;
+  --display: "Spectral SC", Georgia, "Times New Roman", serif;
+  --ui: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; background: var(--ink); color: var(--ash); font-family: var(--ui); overflow: hidden; }
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+
+#hud {
+  position: fixed; top: env(safe-area-inset-top, 0px); left: 0;
+  padding: 10px 16px; display: grid; gap: 6px; font-size: 13px;
+  pointer-events: none; text-shadow: 0 1px 2px #000; max-width: 15rem;
+}
+#hud .row { display: flex; align-items: center; gap: 8px; }
+#dayLbl { font-family: var(--display); font-size: 20px; letter-spacing: .04em; color: var(--ember); }
+#sunTxt { color: var(--dim); font-variant-numeric: tabular-nums; }
+.bar { position: relative; flex: 1; height: 7px; min-width: 7rem; background: rgba(255,255,255,.12); border-radius: 1px; overflow: hidden; }
+.bar i { position: absolute; inset: 0 auto 0 0; width: 100%; }
+#sunFill { background: #e8c46a; }
+#hpFill { background: var(--blood); }
+#foodFill { background: #b58a4a; }
+.lbl { width: 3.6rem; color: var(--dim); text-transform: uppercase; font-size: 10px; letter-spacing: .1em; }
+.inv { display: flex; gap: 14px; font-variant-numeric: tabular-nums; }
+.inv b { color: var(--ash); }
+#frostRow b { color: var(--frost); font-variant-numeric: tabular-nums; }
+#frostRow.near b { color: #fff; }
+
+#log {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 50%; transform: translateX(-50%);
+  width: min(26rem, calc(100% - 32px)); display: grid; gap: 4px; justify-items: center;
+  pointer-events: none; text-align: center;
+}
+#log div {
+  font-size: 14px; padding: 4px 10px; background: rgba(5,6,12,.55); border-radius: 2px;
+  animation: fade 6s forwards; text-shadow: 0 1px 2px #000;
+}
+@keyframes fade { 0% { opacity: 0; transform: translateY(-4px); } 6% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+#rail {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; pointer-events: none;
+}
+#rail button {
+  pointer-events: auto; font: 600 12px var(--ui); color: var(--ash);
+  background: rgba(10, 11, 20, .72); border: 1px solid rgba(233,225,207,.18);
+  padding: 6px 10px; border-radius: 3px; cursor: pointer; display: flex; gap: 6px; align-items: center;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+#rail button:hover { border-color: rgba(242,160,61,.6); }
+#rail button.on { background: rgba(242,160,61,.25); }
+#rail button:focus-visible, #panel button:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+kbd { font: 700 10px var(--ui); color: var(--ember); border: 1px solid rgba(242,160,61,.45); border-radius: 2px; padding: 0 4px; }
+
+#panel {
+  position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
+  background: radial-gradient(ellipse at center, rgba(5,6,12,.35), rgba(5,6,12,.8));
+}
+#panel .card {
+  width: min(30rem, 100%); max-height: calc(100% - 8px); overflow: auto;
+  background: var(--panel); border: 1px solid rgba(242,160,61,.3); padding: 22px 24px; box-sizing: border-box;
+}
+#panel h1 { font: 700 clamp(34px, 7vw, 52px)/1 var(--display); color: var(--ember); margin: 0 0 10px; letter-spacing: .06em; text-wrap: balance; }
+#panel h2 { font: 700 26px/1.1 var(--display); color: var(--ember); margin: 0 0 8px; text-wrap: balance; }
+#panel p { margin: 0 0 10px; line-height: 1.5; font-size: 14px; }
+#panel .lede { font-size: 15px; }
+#panel ul { margin: 0 0 12px; padding-left: 18px; font-size: 13.5px; line-height: 1.5; }
+#panel .keys { color: var(--dim); font-size: 12.5px; }
+#panel .stats { display: flex; gap: 22px; margin: 12px 0 14px; flex-wrap: wrap; }
+#panel .stats div { display: grid; }
+#panel .stats b { font: 700 28px var(--display); color: var(--ash); font-variant-numeric: tabular-nums; }
+#panel .stats span { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+#panel button.go {
+  font: 700 15px var(--ui); color: #1a1006; background: var(--ember); border: 0;
+  padding: 10px 18px; border-radius: 2px; cursor: pointer; margin-top: 4px;
+}
+#panel .best { color: var(--dim); font-size: 12px; margin: 10px 0 0; }
+@media (max-height: 480px) { #hud { font-size: 12px; gap: 3px; } #dayLbl { font-size: 17px; } }
+@media (prefers-reduced-motion: reduce) { #log div { animation-duration: 6s; animation-name: fade; } }
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Game world"></canvas>
+
+<div id="hud">
+  <div class="row"><span id="dayLbl">Day 1</span><span id="sunTxt"></span></div>
+  <div class="row"><span class="lbl" id="sunLbl">Daylight</span><div class="bar"><i id="sunFill"></i></div></div>
+  <div class="row"><span class="lbl">Health</span><div class="bar"><i id="hpFill"></i></div></div>
+  <div class="row"><span class="lbl">Food</span><div class="bar"><i id="foodFill"></i></div></div>
+  <div class="inv"><span>Wood <b id="wood">0</b>/10</span><span>Berries <b id="ber">0</b>/10</span></div>
+  <div class="row" id="frostRow">Frost <b id="frostTxt">0</b> paces west<span id="torchTxt"></span></div>
+</div>
+
+<div id="log" aria-live="polite"></div>
+
+<div id="rail">
+  <button id="bGather"><kbd>Space</kbd>Gather</button>
+  <button data-act="fire"><kbd>F</kbd>Fire / feed</button>
+  <button data-act="eat"><kbd>E</kbd>Eat</button>
+  <button data-act="torch"><kbd>T</kbd>Torch</button>
+  <button data-act="wind"><kbd>B</kbd>Windbreak</button>
+</div>
+
+<div id="panel"><div class="card" id="card"></div></div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const cv = $('#game'), cx = cv.getContext('2d');
+const dark = document.createElement('canvas'), dx = dark.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1); W = innerWidth; H = innerHeight;
+  for (const c of [cv, dark]) { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); }
+  cx.setTransform(DPR, 0, 0, DPR, 0, 0); dx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+addEventListener('resize', resize); resize();
+
+// ---- Tuning -------------------------------------------------------------
+const WORLD_H = 1300, CHUNK = 600, DAY_LEN = 80, PACE = 10, START_X = 240;
+const CAP = 10;
+const nightLen = d => Math.min(40 + (d - 1) * 9, 95);            // nights grow longer
+const frostSpeed = (d, night) => night ? 1.5 : 8 + d * 1.4;       // px/s; the Frost mostly moves by day
+const fireR = f => f.fuel > 0 ? 55 + Math.min(f.fuel, 110) * 1.15 + (f.wind ? 12 : 0) : 0;
+const torchR = () => S.torch > 0 ? 40 + Math.min(S.torch, 35) * 1.6 : 0;
+
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+function rng(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+const groundPat = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+  g.fillStyle = '#a3966a'; g.fillRect(0, 0, 256, 256);
+  const r = rng(7);
+  for (let i = 0; i < 900; i++) { g.fillStyle = r() < .5 ? 'rgba(80,70,40,.18)' : 'rgba(225,210,165,.16)'; g.fillRect(r() * 256, r() * 256, 1 + r() * 3, 1 + r() * 2); }
+  g.strokeStyle = 'rgba(88,88,44,.45)'; g.lineWidth = 1;
+  for (let i = 0; i < 70; i++) { const x = r() * 256, y = r() * 256; g.beginPath(); for (let k = 0; k < 4; k++) { g.moveTo(x + k * 2 - 3, y); g.lineTo(x + k * 2 - 3 + (r() - .5) * 4, y - 4 - r() * 5); } g.stroke(); }
+  return cx.createPattern(c, 'repeat');
+})();
+
+// ---- State --------------------------------------------------------------
+let S = null, mode = 'title';
+const K = {}; let btnGather = false;
+let best = 0; try { best = +localStorage.getItem('emberwake.best') || 0; } catch (e) {}
+
+function newGame() {
+  S = {
+    seed: (Math.random() * 1e9) | 0, day: 1, t: 0, night: false, time: 0,
+    p: { x: START_X, y: WORLD_H / 2, hp: 100, food: 85, wood: 1, berries: 2, face: 1, walk: 0 },
+    frostX: -380, fires: [], shades: [], objs: [], nextChunk: -1, torch: 0,
+    gather: { obj: null, prog: 0 }, near: null, target: null, autoObj: null,
+    spawnT: 4, flags: {}, stats: { fires: 0, maxX: START_X }, shake: 0, hurt: 0, parts: [], cause: '', cullT: 0
+  };
+  genAhead();
+}
+
+function genChunk(i) {
+  const r = rng(S.seed ^ Math.imul(i + 1000, 2654435761));
+  const x0 = i * CHUNK;
+  const dens = Math.max(.4, 1 - Math.max(0, i) * .03);           // the land thins out eastward
+  const barren = i > 2 && r() < .18;
+  const groves = 1 + Math.floor(r() * 3), centers = [];
+  for (let g = 0; g < groves; g++) centers.push([x0 + 60 + r() * (CHUNK - 120), 140 + r() * (WORLD_H - 280)]);
+  const nT = Math.round((7 + r() * 7) * dens * (barren ? .25 : 1));
+  for (let n = 0; n < nT; n++) {
+    const c = centers[n % groves], a = r() * 6.283, d = r() * 170, w = 2 + Math.floor(r() * 3);
+    S.objs.push({ type: 'tree', x: c[0] + Math.cos(a) * d, y: Math.max(30, Math.min(WORLD_H - 30, c[1] + Math.sin(a) * d)), r: 16 + r() * 8, stock: w, max: w, seed: r() });
+  }
+  const nB = Math.round((4 + r() * 5) * dens * (barren ? .3 : 1));
+  for (let n = 0; n < nB; n++) { const s = 2 + Math.floor(r() * 3); S.objs.push({ type: 'bush', x: x0 + r() * CHUNK, y: 40 + r() * (WORLD_H - 80), r: 11, stock: s, max: s, seed: r() }); }
+  if (i > 0 && r() < .16) S.objs.push({ type: 'cache', x: x0 + 80 + r() * (CHUNK - 160), y: 100 + r() * (WORLD_H - 200), r: 15, stock: 1, max: 1, seed: r() });
+  const nR = Math.floor(r() * 5);
+  for (let n = 0; n < nR; n++) S.objs.push({ type: 'rock', x: x0 + r() * CHUNK, y: r() * WORLD_H, r: 6 + r() * 12, stock: 0, seed: r() });
+}
+function genAhead() { while (S.nextChunk * CHUNK < S.p.x + W + CHUNK) genChunk(S.nextChunk++); }
+
+function say(text) {
+  const d = document.createElement('div'); d.textContent = text;
+  const log = $('#log'); log.appendChild(d);
+  while (log.children.length > 3) log.firstChild.remove();
+  setTimeout(() => d.remove(), 6000);
+}
+function once(key, text) { if (!S.flags[key]) { S.flags[key] = 1; say(text); } }
+
+function darkA() {
+  if (!S.night) { const k = S.t - (DAY_LEN - 14); return k > 0 ? .4 * k / 14 : 0; }
+  const L = nightLen(S.day);
+  if (S.t < 8) return .4 + .54 * S.t / 8;
+  if (S.t > L - 7) return Math.max(0, .94 * (L - S.t) / 7);
+  return .94;
+}
+function inLight(x, y, mult = .82) {
+  for (const f of S.fires) { const r = fireR(f); if (r && Math.hypot(x - f.x, y - f.y) < r * mult) return f; }
+  if (S.torch > 0 && Math.hypot(x - S.p.x, y - S.p.y) < torchR() * mult) return S.p;
+  return null;
+}
+function nearFire() { let b = null, bd = 64; for (const f of S.fires) { const d = dist(f, S.p); if (f.fuel > 0 && d < bd) { bd = d; b = f; } } return b; }
+function nearestGatherable() {
+  let b = null, bd = 1e9;
+  for (const o of S.objs) {
+    if (o.stock <= 0 || o.type === 'rock' || o.x < S.frostX) continue;
+    const d = dist(o, S.p) - o.r; if (d < 28 && d < bd) { bd = d; b = o; }
+  }
+  return b;
+}
+function puff(x, y, col, n, spread = 40) {
+  for (let i = 0; i < n; i++) S.parts.push({ x, y, vx: (Math.random() - .5) * spread, vy: (Math.random() - .5) * spread - 10, life: .6 + Math.random() * .5, col, s: 1.5 + Math.random() * 2.5 });
+}
+
+// ---- Actions ------------------------------------------------------------
+function take(o) {
+  const p = S.p; o.stock--;
+  if (o.type === 'tree') { p.wood++; puff(o.x, o.y, '#6b4a2b', 5); if (o.stock === 0) once('stump', 'Trees do not grow back here.'); }
+  else if (o.type === 'bush') { p.berries++; puff(o.x, o.y, '#c4453a', 4); }
+  else if (o.type === 'cache') { p.wood = Math.min(CAP, p.wood + 4); p.berries = Math.min(CAP, p.berries + 4); say('An old cache. Dry wood and dried berries.'); puff(o.x, o.y, '#d9c79a', 10); }
+}
+function act(k) {
+  if (mode !== 'play') return;
+  const p = S.p;
+  if (k === 'fire') {
+    const f = nearFire();
+    if (f) {
+      if (p.wood < 1) return say('No wood to feed the fire.');
+      if (f.fuel >= 140) return say('The fire is already roaring.');
+      p.wood--; f.fuel = Math.min(140, f.fuel + 22); puff(f.x, f.y - 6, '#f2a03d', 8, 30);
+    } else {
+      if (p.x < S.frostX + 10) return say('Nothing burns in the Frost.');
+      if (p.wood < 2) return say('A fire needs 2 wood.');
+      p.wood -= 2; S.stats.fires++;
+      S.fires.push({ x: p.x + p.face * 16, y: p.y + 6, fuel: 44, wind: false, seed: Math.random() * 9 });
+      puff(p.x + p.face * 16, p.y, '#f2a03d', 12, 40);
+      once('firstfire', 'Fire lit. It burns down even when you are not using it.');
+    }
+  } else if (k === 'wind') {
+    const f = nearFire();
+    if (!f) return say('Stand by a fire to build a windbreak.');
+    if (f.wind) return say('This fire already has a windbreak.');
+    if (p.wood < 3) return say('A windbreak needs 3 wood.');
+    p.wood -= 3; f.wind = true; say('Windbreak built. The fire burns half as fast.');
+  } else if (k === 'torch') {
+    if (p.wood < 1) return say('A torch needs 1 wood.');
+    p.wood--; S.torch = Math.min(70, S.torch + 35); once('torch', 'Torch lit. It lasts about half a minute.');
+  } else if (k === 'eat') {
+    if (p.berries < 1) return say('No berries left.');
+    if (p.food >= 97) return say('You are not hungry.');
+    p.berries--; p.food = Math.min(100, p.food + 15);
+  }
+}
+
+// ---- Update -------------------------------------------------------------
+function update(dt) {
+  const p = S.p; S.time += dt; S.t += dt;
+
+  if (!S.night) {
+    if (S.day === 1 && S.t > 2) once('h1', 'Hold Space beside a tree to take wood.');
+    if (S.day === 1 && S.t > 22) once('h2', 'Keep moving east. The Frost will take everything behind you.');
+    if (S.t > DAY_LEN - 25) once('low', 'The sun is getting low.');
+    if (S.t > DAY_LEN - 10) once('dusk', nearFire() ? 'Dusk. Feed the fire.' : 'Dusk. Make a fire now. [F]');
+    if (S.t >= DAY_LEN) { S.night = true; S.t = 0; S.spawnT = 3; say('Night ' + S.day + '. Stay in the light.'); }
+  } else if (S.t >= nightLen(S.day)) {
+    S.night = false; S.t = 0; S.day++; S.flags = {};
+    for (const s of S.shades) puff(s.x, s.y, '#1a1626', 8);
+    S.shades = [];
+    say('Dawn. Day ' + S.day + '. The Frost moves again.');
+  }
+
+  S.frostX += frostSpeed(S.day, S.night) * dt;
+  genAhead();
+  if ((S.cullT -= dt) < 0) { S.cullT = 2; S.objs = S.objs.filter(o => o.x > S.frostX - 900); S.fires = S.fires.filter(f => f.x > S.frostX - 900); }
+
+  // movement
+  let mx = 0, my = 0;
+  if (K.left) mx--; if (K.right) mx++; if (K.up) my--; if (K.down) my++;
+  if (mx || my) { S.target = null; S.autoObj = null; }
+  else if (S.target) {
+    const ddx = S.target.x - p.x, ddy = S.target.y - p.y, d = Math.hypot(ddx, ddy);
+    const stop = S.autoObj ? S.autoObj.r + 14 : 4;
+    if (d > stop) { mx = ddx / d; my = ddy / d; } else S.target = null;
+  }
+  const m = Math.hypot(mx, my);
+  if (m) {
+    mx /= m; my /= m;
+    const sp = 125 * (p.food <= 0 ? .7 : 1);
+    p.x += mx * sp * dt; p.y += my * sp * dt; p.walk += dt * 10;
+    if (Math.abs(mx) > .1) p.face = Math.sign(mx);
+  }
+  p.y = Math.max(20, Math.min(WORLD_H - 20, p.y));
+  S.stats.maxX = Math.max(S.stats.maxX, p.x);
+
+  // gathering
+  S.near = nearestGatherable();
+  const auto = S.autoObj && S.autoObj.stock > 0 && !S.target && dist(S.autoObj, p) < S.autoObj.r + 30 ? S.autoObj : null;
+  const g = (K.gather || btnGather) ? (auto || S.near) : auto;
+  if (g && !m) {
+    if (g !== S.gather.obj) { S.gather.obj = g; S.gather.prog = 0; }
+    const full = (g.type === 'tree' && p.wood >= CAP) || (g.type === 'bush' && p.berries >= CAP);
+    if (full) { once('full' + g.type, 'You can only carry ' + CAP + (g.type === 'tree' ? ' wood.' : ' berries.')); S.gather.prog = 0; }
+    else {
+      S.gather.prog += dt / ({ tree: .85, bush: .45, cache: 1.4 })[g.type];
+      if (S.gather.prog >= 1) { S.gather.prog = 0; take(g); }
+    }
+  } else { S.gather.obj = null; S.gather.prog = 0; }
+  if (S.autoObj && (S.autoObj.stock <= 0 || S.autoObj.x < S.frostX)) S.autoObj = null;
+
+  // fires & torch
+  for (const f of S.fires) { if (f.x < S.frostX) f.fuel = 0; f.fuel = Math.max(0, f.fuel - dt * (f.wind ? .5 : 1)); }
+  if (S.torch > 0) { S.torch = Math.max(0, S.torch - dt); if (S.torch === 0) say('Your torch gutters out.'); }
+
+  // shades
+  const a = darkA();
+  if (S.night && a > .6) {
+    if ((S.spawnT -= dt) <= 0) {
+      S.spawnT = Math.max(.7, 3.4 - S.day * .28) * (.6 + Math.random() * .8);
+      if (S.shades.length < 6 + S.day * 2) {
+        for (let tries = 0; tries < 6; tries++) {
+          const ang = Math.random() * 6.283, d = 360 + Math.random() * 200;
+          const x = p.x + Math.cos(ang) * d, y = p.y + Math.sin(ang) * d;
+          if (y < 0 || y > WORLD_H || x < S.frostX || inLight(x, y, 1.1)) continue;
+          S.shades.push({ x, y, life: 1, wob: Math.random() * 9, sp: (46 + S.day * 5) * (.85 + Math.random() * .3) });
+          if (S.shades.length === 1) once('shade', 'Something is moving out in the dark.');
+          break;
+        }
+      }
+    }
+  }
+  for (const s of S.shades) {
+    s.wob += dt;
+    const rep = inLight(s.x, s.y, .9);
+    if (rep) {
+      const ddx = s.x - rep.x, ddy = s.y - rep.y, d = Math.hypot(ddx, ddy) || 1;
+      s.x += ddx / d * s.sp * 1.15 * dt; s.y += ddy / d * s.sp * 1.15 * dt; s.life -= dt * .35;
+    } else {
+      const ddx = p.x - s.x, ddy = p.y - s.y, d = Math.hypot(ddx, ddy) || 1, ux = ddx / d, uy = ddy / d;
+      const wig = Math.sin(s.wob * 2) * .55;
+      s.x += (ux - uy * wig) * s.sp * dt; s.y += (uy + ux * wig) * s.sp * dt;
+      if (d < 16) {
+        p.hp -= 14 + S.day * 1.5; S.cause = 'shade'; S.hurt = 1; S.shake = .45; s.life = 0;
+        puff(s.x, s.y, '#1a1626', 14, 70);
+        once('hit', 'It found you. Light keeps them back.');
+      }
+    }
+  }
+  S.shades = S.shades.filter(s => s.life > 0);
+
+  // body
+  p.food = Math.max(0, p.food - dt * .75);
+  if (p.food <= 0) { p.hp -= 1.5 * dt; S.cause = 'hunger'; once('starve', 'You are starving. Eat. [E]'); }
+  else if (p.food < 25) once('hungry', 'You are hungry.');
+  const lit = inLight(p.x, p.y);
+  if (S.night && a > .6 && !lit) { p.hp -= 1.1 * dt; S.cause = 'cold'; once('cold', 'The cold bites in the dark. Get to light.'); }
+  if (p.food > 40 && (!S.night || lit)) { p.hp += .7 * dt; p.food -= .15 * dt; }
+  const fd = p.x - S.frostX;
+  if (fd < 0) { p.hp -= 22 * dt; S.cause = 'frost'; }
+  else if (fd < 150) { p.hp -= (1 - fd / 150) * 5 * dt; S.cause = 'frost'; }
+  if (fd < 320) once('frostNear', 'The Frost is close. Move east.');
+  p.hp = Math.min(100, p.hp);
+  S.hurt = Math.max(0, S.hurt - dt * 2); S.shake = Math.max(0, S.shake - dt);
+
+  // particles: snow off the Frost edge, plus puffs
+  if (S.frostX > p.x - W) for (let i = 0; i < 2; i++) S.parts.push({ x: S.frostX + Math.random() * 30, y: p.y + (Math.random() - .5) * H, vx: 20 + Math.random() * 30, vy: (Math.random() - .5) * 10, life: 1.5 + Math.random(), col: '#eef7fb', s: 1 + Math.random() * 1.5 });
+  for (const q of S.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; }
+  S.parts = S.parts.filter(q => q.life > 0);
+
+  if (p.hp <= 0) die();
+}
+
+// ---- Render -------------------------------------------------------------
+function drawTree(o) {
+  if (o.stock <= 0) {
+    cx.fillStyle = '#5d4128'; cx.beginPath(); cx.arc(o.x, o.y, 6, 0, 6.283); cx.fill();
+    cx.strokeStyle = '#8a6a44'; cx.lineWidth = 1; cx.beginPath(); cx.arc(o.x, o.y, 3, 0, 6.283); cx.stroke(); return;
+  }
+  const k = .65 + .35 * o.stock / o.max, r = o.r * k;
+  cx.fillStyle = 'rgba(30,24,10,.28)'; cx.beginPath(); cx.ellipse(o.x + 7, o.y + 8, r * 1.1, r * .55, 0, 0, 6.283); cx.fill();
+  cx.fillStyle = '#4a3220'; cx.fillRect(o.x - 2.5, o.y - 2, 5, 10);
+  const cols = ['#26402a', '#31502f', '#3f6338'];
+  for (let i = 0; i < 3; i++) {
+    const a = o.seed * 6 + i * 2.1;
+    cx.fillStyle = cols[i]; cx.beginPath();
+    cx.arc(o.x + Math.cos(a) * r * .35, o.y - 8 + Math.sin(a) * r * .3 - i * 2, r * (.85 - i * .17), 0, 6.283); cx.fill();
+  }
+}
+function drawBush(o) {
+  cx.fillStyle = 'rgba(30,24,10,.25)'; cx.beginPath(); cx.ellipse(o.x + 4, o.y + 5, 13, 6, 0, 0, 6.283); cx.fill();
+  cx.fillStyle = o.stock > 0 ? '#4d5b30' : '#6b6a46';
+  for (let i = 0; i < 3; i++) { cx.beginPath(); cx.arc(o.x + (i - 1) * 6, o.y - Math.abs(i - 1) * -3, 8, 0, 6.283); cx.fill(); }
+  cx.fillStyle = '#c4453a';
+  for (let i = 0; i < o.stock; i++) { const a = o.seed * 9 + i * 2.4; cx.beginPath(); cx.arc(o.x + Math.cos(a) * 7, o.y + Math.sin(a) * 4 - 2, 2.2, 0, 6.283); cx.fill(); }
+}
+function drawCache(o) {
+  cx.fillStyle = '#7d7666';
+  for (let i = 0; i < 7; i++) { const a = i / 7 * 6.283; cx.beginPath(); cx.arc(o.x + Math.cos(a) * 17, o.y + Math.sin(a) * 11, 3.5, 0, 6.283); cx.fill(); }
+  cx.fillStyle = o.stock > 0 ? '#6b4a2b' : '#3d2a19'; cx.fillRect(o.x - 7, o.y - 6, 14, 10);
+  cx.strokeStyle = '#a07a4a'; cx.lineWidth = 1; cx.strokeRect(o.x - 7, o.y - 6, 14, 10);
+  if (o.stock > 0) { cx.beginPath(); cx.moveTo(o.x - 7, o.y - 2); cx.lineTo(o.x + 7, o.y - 2); cx.stroke(); }
+}
+function drawRock(o) {
+  cx.fillStyle = '#857d6a'; cx.beginPath(); cx.ellipse(o.x, o.y, o.r, o.r * .7, o.seed * 3, 0, 6.283); cx.fill();
+  cx.fillStyle = 'rgba(255,255,255,.12)'; cx.beginPath(); cx.ellipse(o.x - o.r * .25, o.y - o.r * .2, o.r * .45, o.r * .3, 0, 0, 6.283); cx.fill();
+}
+function drawFire(f) {
+  cx.fillStyle = '#3a3530'; cx.beginPath(); cx.ellipse(f.x, f.y, 11, 7, 0, 0, 6.283); cx.fill();
+  cx.strokeStyle = '#4a3020'; cx.lineWidth = 3;
+  cx.beginPath(); cx.moveTo(f.x - 9, f.y + 3); cx.lineTo(f.x + 9, f.y - 3); cx.moveTo(f.x - 9, f.y - 3); cx.lineTo(f.x + 9, f.y + 3); cx.stroke();
+  if (f.wind) { // stakes on the west side, against the Frost wind
+    cx.strokeStyle = '#5b4026'; cx.lineWidth = 2.5;
+    for (let i = -4; i <= 4; i++) { const a = Math.PI + i * .3, x = f.x + Math.cos(a) * 22, y = f.y + Math.sin(a) * 16; cx.beginPath(); cx.moveTo(x, y + 4); cx.lineTo(x + 3, y - 10); cx.stroke(); }
+  }
+  if (f.fuel > 0) {
+    const s = Math.min(1, .35 + f.fuel / 60), fl = Math.sin(S.time * 13 + f.seed) * 1.5;
+    cx.fillStyle = '#e0581f'; cx.beginPath(); cx.ellipse(f.x, f.y - 6 * s, 7 * s, (12 + fl) * s, 0, 0, 6.283); cx.fill();
+    cx.fillStyle = '#f2a03d'; cx.beginPath(); cx.ellipse(f.x, f.y - 4 * s, 4.5 * s, (8 + fl) * s, 0, 0, 6.283); cx.fill();
+    cx.fillStyle = '#ffe6a0'; cx.beginPath(); cx.ellipse(f.x, f.y - 2 * s, 2 * s, 4 * s, 0, 0, 6.283); cx.fill();
+  }
+}
+function drawPlayer(p) {
+  const bob = Math.sin(p.walk) * 1.5;
+  cx.fillStyle = 'rgba(30,24,10,.3)'; cx.beginPath(); cx.ellipse(p.x + 3, p.y + 9, 9, 4, 0, 0, 6.283); cx.fill();
+  cx.fillStyle = '#2b2018'; cx.fillRect(p.x - 4, p.y + 2 + bob, 3, 6); cx.fillRect(p.x + 1, p.y + 2 - bob, 3, 6);
+  cx.fillStyle = '#8e2f28'; cx.beginPath(); cx.ellipse(p.x, p.y - 2, 8, 9, 0, 0, 6.283); cx.fill();
+  cx.fillStyle = '#6e221d'; cx.beginPath(); cx.ellipse(p.x - p.face * 3, p.y, 5, 7, 0, 0, 6.283); cx.fill();
+  cx.fillStyle = '#e2c9a0'; cx.beginPath(); cx.arc(p.x + p.face * 2, p.y - 11, 4.5, 0, 6.283); cx.fill();
+  if (S.torch > 0) {
+    const tx = p.x + p.face * 10, ty = p.y - 6;
+    cx.strokeStyle = '#5b4026'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(tx - p.face * 2, ty + 8); cx.lineTo(tx, ty - 4); cx.stroke();
+    cx.fillStyle = '#f2a03d'; cx.beginPath(); cx.ellipse(tx, ty - 8, 3, 5 + Math.sin(S.time * 15), 0, 0, 6.283); cx.fill();
+  }
+}
+
+function render() {
+  const p = S.p;
+  let camX = p.x - W / 2, camY = p.y - H / 2;
+  camY = H < WORLD_H + 80 ? Math.max(-40, Math.min(WORLD_H + 40 - H, camY)) : (WORLD_H - H) / 2;
+  if (S.shake > 0) { camX += (Math.random() - .5) * 14 * S.shake; camY += (Math.random() - .5) * 14 * S.shake; }
+
+  cx.save(); cx.translate(-camX, -camY);
+  cx.fillStyle = '#2b2519'; cx.fillRect(camX, camY, W, H);
+  const y0 = Math.max(camY, 0), y1 = Math.min(camY + H, WORLD_H);
+  cx.fillStyle = groundPat; cx.fillRect(camX, y0, W, y1 - y0);
+  cx.fillStyle = 'rgba(0,0,0,.3)'; cx.fillRect(camX, -6, W, 6); cx.fillRect(camX, WORLD_H, W, 6);
+
+  const vis = [];
+  for (const o of S.objs) if (o.x > camX - 60 && o.x < camX + W + 60 && o.y > camY - 60 && o.y < camY + H + 60) vis.push(o);
+  for (const f of S.fires) if (f.x > camX - 60 && f.x < camX + W + 60) vis.push({ type: 'fire', y: f.y, f });
+  vis.push({ type: 'player', y: p.y });
+  vis.sort((a, b) => (a.type === 'rock' ? -1e4 : a.y) - (b.type === 'rock' ? -1e4 : b.y));
+  for (const o of vis) {
+    if (o.type === 'tree') drawTree(o); else if (o.type === 'bush') drawBush(o);
+    else if (o.type === 'cache') drawCache(o); else if (o.type === 'rock') drawRock(o);
+    else if (o.type === 'fire') drawFire(o.f); else drawPlayer(p);
+  }
+
+  // gather cue + progress
+  if (mode === 'play' && S.near && !S.gather.obj && darkA() < .6) {
+    cx.font = '700 10px "Atkinson Hyperlegible", system-ui, sans-serif'; cx.textAlign = 'center';
+    cx.fillStyle = 'rgba(11,13,22,.7)'; cx.fillRect(S.near.x - 20, S.near.y - S.near.r - 26, 40, 14);
+    cx.fillStyle = '#f2a03d'; cx.fillText('SPACE', S.near.x, S.near.y - S.near.r - 16);
+  }
+  if (S.gather.obj && S.gather.prog > 0) {
+    cx.strokeStyle = 'rgba(11,13,22,.6)'; cx.lineWidth = 4; cx.beginPath(); cx.arc(p.x, p.y - 2, 16, 0, 6.283); cx.stroke();
+    cx.strokeStyle = '#f2a03d'; cx.lineWidth = 3; cx.beginPath(); cx.arc(p.x, p.y - 2, 16, -1.571, -1.571 + 6.283 * S.gather.prog); cx.stroke();
+  }
+
+  // the Frost
+  if (S.frostX > camX - 40) {
+    const top = Math.floor(camY / 12) * 12 - 12;
+    cx.beginPath(); cx.moveTo(camX - 20, top);
+    for (let y = top; y < camY + H + 24; y += 12) cx.lineTo(S.frostX + Math.sin(y * .05 + S.time * .3) * 10 + Math.sin(y * .17) * 6, y);
+    cx.lineTo(camX - 20, camY + H + 24); cx.closePath();
+    cx.fillStyle = 'rgba(214,234,244,.9)'; cx.fill();
+    const g = cx.createLinearGradient(S.frostX, 0, S.frostX + 170, 0);
+    g.addColorStop(0, 'rgba(200,228,242,.5)'); g.addColorStop(1, 'rgba(200,228,242,0)');
+    cx.fillStyle = g; cx.fillRect(S.frostX, camY, 170, H);
+  }
+  cx.restore();
+
+  // darkness with light cut out
+  const a = darkA();
+  const lights = [];
+  for (const f of S.fires) { const r = fireR(f); if (r) lights.push({ x: f.x, y: f.y, r: r * (1 + Math.sin(S.time * 9 + f.seed) * .025), s: 1 }); }
+  if (S.torch > 0) lights.push({ x: p.x, y: p.y, r: torchR() * (1 + Math.sin(S.time * 11) * .03), s: 1 });
+  lights.push({ x: p.x, y: p.y, r: 46, s: .55 });
+  if (a > .01) {
+    dx.globalCompositeOperation = 'source-over'; dx.clearRect(0, 0, W, H);
+    dx.fillStyle = `rgba(4,6,16,${a})`; dx.fillRect(0, 0, W, H);
+    dx.globalCompositeOperation = 'destination-out';
+    for (const L of lights) {
+      const sx = L.x - camX, sy = L.y - camY, g = dx.createRadialGradient(sx, sy, 0, sx, sy, L.r);
+      g.addColorStop(0, `rgba(0,0,0,${L.s})`); g.addColorStop(.55, `rgba(0,0,0,${.88 * L.s})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      dx.fillStyle = g; dx.beginPath(); dx.arc(sx, sy, L.r, 0, 6.283); dx.fill();
+    }
+    dx.globalCompositeOperation = 'source-over';
+    cx.drawImage(dark, 0, 0, W, H);
+    cx.globalCompositeOperation = 'lighter';
+    for (const L of lights) {
+      if (L.s < 1) continue;
+      const sx = L.x - camX, sy = L.y - camY, g = cx.createRadialGradient(sx, sy, 0, sx, sy, L.r);
+      g.addColorStop(0, `rgba(255,140,40,${.22 * a})`); g.addColorStop(1, 'rgba(255,140,40,0)');
+      cx.fillStyle = g; cx.beginPath(); cx.arc(sx, sy, L.r, 0, 6.283); cx.fill();
+    }
+    cx.globalCompositeOperation = 'source-over';
+  }
+  // dusk and dawn tint
+  if (!S.night && S.t > DAY_LEN - 22) { cx.fillStyle = `rgba(230,110,40,${(S.t - (DAY_LEN - 22)) / 22 * .2})`; cx.fillRect(0, 0, W, H); }
+
+  // things that show through the dark: Frost glimmer, shades, particles
+  cx.save(); cx.translate(-camX, -camY);
+  if (a > .3 && S.frostX > camX - 20) {
+    cx.strokeStyle = `rgba(190,225,245,${.35 * a})`; cx.lineWidth = 2; cx.beginPath();
+    const top = Math.floor(camY / 12) * 12 - 12;
+    for (let y = top; y < camY + H + 24; y += 12) { const x = S.frostX + Math.sin(y * .05 + S.time * .3) * 10 + Math.sin(y * .17) * 6; y === top ? cx.moveTo(x, y) : cx.lineTo(x, y); }
+    cx.stroke();
+  }
+  for (const s of S.shades) {
+    const al = Math.max(0, Math.min(1, s.life));
+    cx.fillStyle = `rgba(8,6,16,${.6 * al})`;
+    for (let i = 0; i < 3; i++) { cx.beginPath(); cx.arc(s.x + Math.sin(s.wob * 3 + i) * 4, s.y + Math.cos(s.wob * 2 + i * 2) * 4 - i * 4, 11 - i * 2.5, 0, 6.283); cx.fill(); }
+    const blink = Math.sin(s.wob * 1.3 + s.sp) > .96 ? .2 : 1;
+    cx.fillStyle = `rgba(222,238,255,${.9 * al})`;
+    cx.fillRect(s.x - 5, s.y - 6, 3, 2 * blink); cx.fillRect(s.x + 2, s.y - 6, 3, 2 * blink);
+  }
+  for (const q of S.parts) { cx.globalAlpha = Math.min(1, q.life); cx.fillStyle = q.col; cx.fillRect(q.x, q.y, q.s, q.s); }
+  cx.globalAlpha = 1;
+  cx.restore();
+
+  // pointers to burning fires that are off-screen
+  for (const f of S.fires) {
+    if (f.fuel <= 0) continue;
+    const sx = f.x - camX, sy = f.y - camY;
+    if (sx > 0 && sx < W && sy > 0 && sy < H) continue;
+    const ex = Math.max(14, Math.min(W - 14, sx)), ey = Math.max(70, Math.min(H - 54, sy)), ang = Math.atan2(sy - ey, sx - ex);
+    cx.save(); cx.translate(ex, ey); cx.rotate(ang); cx.fillStyle = '#f2a03d';
+    cx.beginPath(); cx.moveTo(8, 0); cx.lineTo(-5, -6); cx.lineTo(-5, 6); cx.closePath(); cx.fill(); cx.restore();
+  }
+
+  // Frost and injury vignettes
+  const fd = p.x - S.frostX;
+  if (fd < 260) {
+    const k = Math.min(1, 1 - fd / 260), g = cx.createLinearGradient(0, 0, W * .5, 0);
+    g.addColorStop(0, `rgba(200,230,245,${.55 * k})`); g.addColorStop(1, 'rgba(200,230,245,0)');
+    cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+  }
+  if (S.hurt > 0 || p.hp < 30) {
+    const k = Math.max(S.hurt * .5, p.hp < 30 ? (30 - p.hp) / 30 * .35 * (.8 + Math.sin(S.time * 5) * .2) : 0);
+    const g = cx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .3, W / 2, H / 2, Math.max(W, H) * .7);
+    g.addColorStop(0, 'rgba(160,20,20,0)'); g.addColorStop(1, `rgba(160,20,20,${k})`);
+    cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+  }
+}
+
+// ---- HUD ----------------------------------------------------------------
+const el = id => document.getElementById(id);
+const hudEl = { day: el('dayLbl'), sunTxt: el('sunTxt'), sunLbl: el('sunLbl'), sun: el('sunFill'), hp: el('hpFill'), food: el('foodFill'), wood: el('wood'), ber: el('ber'), frost: el('frostTxt'), frostRow: el('frostRow'), torch: el('torchTxt') };
+const mmss = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+function hud() {
+  const p = S.p;
+  hudEl.day.textContent = (S.night ? 'Night ' : 'Day ') + S.day;
+  if (S.night) {
+    const L = nightLen(S.day);
+    hudEl.sunLbl.textContent = 'Night'; hudEl.sunTxt.textContent = 'dawn in ' + mmss(L - S.t);
+    hudEl.sun.style.width = (S.t / L * 100) + '%'; hudEl.sun.style.background = '#6f7fa8';
+  } else {
+    hudEl.sunLbl.textContent = 'Daylight'; hudEl.sunTxt.textContent = 'dusk in ' + mmss(DAY_LEN - S.t);
+    hudEl.sun.style.width = ((1 - S.t / DAY_LEN) * 100) + '%';
+    hudEl.sun.style.background = S.t > DAY_LEN - 25 ? '#e0703a' : '#e8c46a';
+  }
+  hudEl.hp.style.width = Math.max(0, p.hp) + '%';
+  hudEl.food.style.width = p.food + '%';
+  hudEl.wood.textContent = p.wood; hudEl.ber.textContent = p.berries;
+  const fd = Math.max(0, Math.round((p.x - S.frostX) / PACE));
+  hudEl.frost.textContent = fd; hudEl.frostRow.classList.toggle('near', fd < 30);
+  hudEl.torch.textContent = S.torch > 0 ? ' · torch ' + Math.ceil(S.torch) + 's' : '';
+}
+
+// ---- Screens ------------------------------------------------------------
+const panel = el('panel'), card = el('card');
+const CAUSES = { shade: 'Something in the dark reached you.', cold: 'The cold took you in the dark.', hunger: 'You starved.', frost: 'The Frost caught you.' };
+function showTitle() {
+  card.innerHTML = `
+    <h1>Emberwake</h1>
+    <p class="lede">The Frost is coming from the west, and it does not stop. Every dusk you need a fire. Every dawn you have to leave it behind.</p>
+    <ul>
+      <li><b>Daylight</b> is for walking east and gathering wood and berries.</li>
+      <li><b>Night</b> is cold, and things in the dark come for you. Only light keeps them back.</li>
+      <li><b>Nothing regrows.</b> You carry at most 10 of each. Every night is longer than the last.</li>
+    </ul>
+    <p class="keys">Move with WASD or arrows, or click where to walk. Hold <kbd>Space</kbd> or click a tree or bush to gather. <kbd>F</kbd> fire or feed · <kbd>E</kbd> eat · <kbd>T</kbd> torch · <kbd>B</kbd> windbreak · <kbd>P</kbd> pause</p>
+    <button class="go" id="go">Walk into day 1</button>
+    ${best ? `<p class="best">Longest so far: ${best} ${best === 1 ? 'day' : 'days'}</p>` : ''}`;
+  panel.hidden = false; el('go').onclick = start; el('go').focus();
+}
+function die() {
+  mode = 'over';
+  const days = S.day, paces = Math.max(0, Math.round((S.stats.maxX - START_X) / PACE));
+  const newBest = days > best; if (newBest) { best = days; try { localStorage.setItem('emberwake.best', best); } catch (e) {} }
+  card.innerHTML = `
+    <h2>${S.night ? 'Night' : 'Day'} ${days}. ${CAUSES[S.cause] || 'You fell.'}</h2>
+    <div class="stats">
+      <div><b>${days}</b><span>${days === 1 ? 'day' : 'days'}</span></div>
+      <div><b>${paces.toLocaleString()}</b><span>paces east</span></div>
+      <div><b>${S.stats.fires}</b><span>fires lit</span></div>
+    </div>
+    <p class="best">${newBest ? 'Your longest run yet.' : 'Longest so far: ' + best + ' days'}</p>
+    <button class="go" id="go">Try again</button>`;
+  panel.hidden = false; el('go').onclick = start; el('go').focus();
+}
+function pause(on) {
+  if (on && mode === 'play') {
+    mode = 'pause'; card.innerHTML = `<h2>Paused</h2><p>The Frost waits with you.</p><button class="go" id="go">Resume</button>`;
+    panel.hidden = false; el('go').onclick = () => pause(false); el('go').focus();
+  } else if (!on && mode === 'pause') { mode = 'play'; panel.hidden = true; cv.focus(); }
+}
+function start() {
+  if (document.activeElement) document.activeElement.blur();
+  newGame(); mode = 'play'; panel.hidden = true;
+  $('#log').innerHTML = ''; say('Day 1. The Frost is somewhere behind you, to the west.');
+  for (const k in K) K[k] = false;
+}
+
+// ---- Input --------------------------------------------------------------
+const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', Space: 'gather' };
+addEventListener('keydown', e => {
+  if (KEYMAP[e.code]) { if (mode === 'play') { K[KEYMAP[e.code]] = true; e.preventDefault(); } }
+  if (e.repeat) return;
+  if (mode === 'play') {
+    const a = { KeyF: 'fire', KeyE: 'eat', KeyT: 'torch', KeyB: 'wind' }[e.code];
+    if (a) act(a);
+    if (e.code === 'KeyP' || e.code === 'Escape') pause(true);
+  } else if (mode === 'pause' && (e.code === 'KeyP' || e.code === 'Escape')) pause(false);
+});
+addEventListener('keyup', e => { if (KEYMAP[e.code]) K[KEYMAP[e.code]] = false; });
+addEventListener('blur', () => { for (const k in K) K[k] = false; btnGather = false; });
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(true); });
+
+cv.addEventListener('pointerdown', e => {
+  if (mode !== 'play') return;
+  const p = S.p, camX = p.x - W / 2;
+  let camY = p.y - H / 2; camY = H < WORLD_H + 80 ? Math.max(-40, Math.min(WORLD_H + 40 - H, camY)) : (WORLD_H - H) / 2;
+  const wx = e.clientX + camX, wy = e.clientY + camY;
+  let hit = null;
+  for (const o of S.objs) if (o.stock > 0 && o.type !== 'rock' && o.x > S.frostX && Math.hypot(o.x - wx, o.y - wy) < o.r + 12) { hit = o; break; }
+  S.autoObj = hit; S.target = hit ? { x: hit.x, y: hit.y } : { x: wx, y: wy };
+});
+const bG = el('bGather');
+const gOn = e => { e.preventDefault(); btnGather = true; bG.classList.add('on'); };
+const gOff = () => { btnGather = false; bG.classList.remove('on'); };
+bG.addEventListener('pointerdown', gOn);
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) bG.addEventListener(ev, gOff);
+for (const b of document.querySelectorAll('#rail [data-act]')) b.addEventListener('click', () => { act(b.dataset.act); b.blur(); });
+
+// ---- Loop ---------------------------------------------------------------
+newGame(); S.t = DAY_LEN - 6; S.p.x = 700; S.frostX = 380; genAhead(); // a dusk scene behind the title
+showTitle();
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (mode === 'play') update(dt); else if (mode === 'title') S.time += dt;
+  render(); hud();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
