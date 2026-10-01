@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Emberwake</title>
+<title>Harsh</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral+SC:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
 <style>
@@ -93,6 +93,7 @@ kbd { font: 700 10px var(--ui); color: var(--ember); border: 1px solid rgba(242,
   padding: 10px 18px; border-radius: 2px; cursor: pointer; margin-top: 4px;
 }
 #panel .best { color: var(--dim); font-size: 12px; margin: 10px 0 0; }
+#panel .best a { color: var(--dim); }
 @media (max-height: 480px) { #hud { font-size: 12px; gap: 3px; } #dayLbl { font-size: 17px; } }
 @media (prefers-reduced-motion: reduce) { #log div { animation-duration: 6s; animation-name: fade; } }
 </style>
@@ -159,7 +160,7 @@ const groundPat = (() => {
 // ---- State --------------------------------------------------------------
 let S = null, mode = 'title';
 const K = {}; let btnGather = false;
-let best = 0; try { best = +localStorage.getItem('emberwake.best') || 0; } catch (e) {}
+let best = 0; try { best = +localStorage.getItem('harsh.best') || 0; } catch (e) {}
 
 function newGame() {
   S = {
@@ -595,7 +596,7 @@ const panel = el('panel'), card = el('card');
 const CAUSES = { shade: 'Something in the dark reached you.', cold: 'The cold took you in the dark.', hunger: 'You starved.', frost: 'The Frost caught you.' };
 function showTitle() {
   card.innerHTML = `
-    <h1>Emberwake</h1>
+    <h1>Harsh</h1>
     <p class="lede">The Frost is coming from the west, and it does not stop. Every dusk you need a fire. Every dawn you have to leave it behind.</p>
     <ul>
       <li><b>Daylight</b> is for walking east and gathering wood and berries.</li>
@@ -604,13 +605,14 @@ function showTitle() {
     </ul>
     <p class="keys">Move with WASD or arrows, or click where to walk. Hold <kbd>Space</kbd> or click a tree or bush to gather. <kbd>F</kbd> fire or feed · <kbd>E</kbd> eat · <kbd>T</kbd> torch · <kbd>B</kbd> windbreak · <kbd>P</kbd> pause</p>
     <button class="go" id="go">Walk into day 1</button>
-    ${best ? `<p class="best">Longest so far: ${best} ${best === 1 ? 'day' : 'days'}</p>` : ''}`;
+    ${best ? `<p class="best">Longest so far: ${best} ${best === 1 ? 'day' : 'days'}</p>` : ''}
+    <p class="best"><a href="https://stilotto.github.io/">More games from Stilotto</a></p>`;
   panel.hidden = false; el('go').onclick = start; el('go').focus();
 }
 function die() {
   mode = 'over';
   const days = S.day, paces = Math.max(0, Math.round((S.stats.maxX - START_X) / PACE));
-  const newBest = days > best; if (newBest) { best = days; try { localStorage.setItem('emberwake.best', best); } catch (e) {} }
+  const newBest = days > best; if (newBest) { best = days; try { localStorage.setItem('harsh.best', best); } catch (e) {} }
   card.innerHTML = `
     <h2>${S.night ? 'Night' : 'Day'} ${days}. ${CAUSES[S.cause] || 'You fell.'}</h2>
     <div class="stats">

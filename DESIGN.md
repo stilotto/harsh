@@ -1,4 +1,4 @@
-# Emberwake — design notes
+# Harsh — design notes
 
 ## The problem
 Day one of a survival game is tense because you have nothing and the sun is setting.
