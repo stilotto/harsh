@@ -35,6 +35,16 @@ Wood is fuel, torch and weapon, and you still only carry 10.
 | Ruins and relics | Pick 1 of 2 every ~4 chunks. Gear travels with you; safety still does not. |
 | Sound and feedback | Synthesized wind, crackle, chops, banners, floating numbers. |
 
+## Progression without permanence: the camp kit
+Safety still never accumulates in a place. It accumulates in your pack, and it wears out.
+
+- Camp pieces are built from wood and stone (rocks are now gatherable), set at dusk and packed up at dawn with Space.
+- Every piece has wear that travels with it: Stakes 4 hits, Windbreak 3 nights, Ember trap 3 bursts, Cairn lamp 150 s of light, Sentinel 12 shots.
+- New pieces are learned by surviving: Stakes and Windbreak day 1, Ember trap day 2, Cairn lamp day 3, Sentinel day 5.
+- The pack holds 3 pieces on day 1 and grows to 7. What you cannot carry, or do not pack in time, the Frost takes.
+- From night 2, shades telegraph (red eyes) and rush through the light, so a fire alone stops being enough.
+  A big fire burns a rusher down; stakes, traps and sentinels cover the rest.
+
 ## Tuning knobs (top of `index.html`)
 `DAY_LEN`, `nightLen`, `frostSpeed`, `fireR`, `cap`, `RELICS`, spawn timers in `update`, chunk density in `genChunk`.
 
